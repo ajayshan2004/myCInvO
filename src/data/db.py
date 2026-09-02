@@ -12,7 +12,12 @@ class DuckDBManager:
     """Manages DuckDB analytical database connection and schemas."""
 
     def __init__(self, db_path: Optional[str] = None) -> None:
-        """PSEUDOCODE: 1. Default to '.data/alphacraft.duckdb' if None. 2. Init connection and schema."""
+        """
+        PSEUDOCODE:
+        1. Default to '.data/alphacraft.duckdb' if db_path is None.
+        2. Create parent directories if required.
+        3. Connect to DuckDB and initialize schema tables.
+        """
         if db_path is None:
             data_dir = Path(".data")
             data_dir.mkdir(parents=True, exist_ok=True)
@@ -23,7 +28,12 @@ class DuckDBManager:
         self._init_schema()
 
     def _init_schema(self) -> None:
-        """PSEUDOCODE: Create 'securities' (PK: isin) and 'eod_quotes' (PK: isin, exchange, trade_date)."""
+        """
+        PSEUDOCODE:
+        1. Create 'securities' master table (PK: isin).
+        2. Create 'eod_quotes' time-series table (PK: isin, exchange, trade_date).
+        3. Create 'system_metadata' table (PK: key) for delta hashing and state.
+        """
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS securities (
                 isin VARCHAR PRIMARY KEY, company_name VARCHAR NOT NULL,
@@ -40,10 +50,39 @@ class DuckDBManager:
                 deliverable_volume BIGINT DEFAULT 0, delivery_pct DOUBLE DEFAULT 0.0,
                 PRIMARY KEY (isin, exchange, trade_date)
             );
+            CREATE TABLE IF NOT EXISTS system_metadata (
+                key VARCHAR PRIMARY KEY,
+                value VARCHAR NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         """)
 
+    def set_metadata(self, key: str, value: str) -> None:
+        """
+        PSEUDOCODE:
+        1. Execute INSERT OR REPLACE on system_metadata table with key and value.
+        """
+        self.conn.execute(
+            "INSERT OR REPLACE INTO system_metadata (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP);",
+            (key, value)
+        )
+
+    def get_metadata(self, key: str) -> Optional[str]:
+        """
+        PSEUDOCODE:
+        1. Query value from system_metadata for the given key.
+        2. Return string value if found, else None.
+        """
+        row = self.conn.execute("SELECT value FROM system_metadata WHERE key = ? LIMIT 1;", (key,)).fetchone()
+        return row[0] if row else None
+
     def upsert_securities(self, securities: List[Security]) -> int:
-        """PSEUDOCODE: Batch insert or replace into securities table."""
+        """
+        PSEUDOCODE:
+        1. Convert list of Security domain models into tuple records.
+        2. Execute batch INSERT OR REPLACE into securities table.
+        3. Return total inserted record count.
+        """
         if not securities:
             return 0
         records = [
@@ -55,7 +94,12 @@ class DuckDBManager:
         return len(records)
 
     def upsert_eod_quotes(self, quotes: List[EODQuote]) -> int:
-        """PSEUDOCODE: Batch insert or replace into eod_quotes table."""
+        """
+        PSEUDOCODE:
+        1. Convert list of EODQuote models into tuple records.
+        2. Execute batch INSERT OR REPLACE into eod_quotes table.
+        3. Return count of processed quotes.
+        """
         if not quotes:
             return 0
         records = [
@@ -68,7 +112,11 @@ class DuckDBManager:
         return len(records)
 
     def get_security(self, identifier: str) -> Optional[Security]:
-        """PSEUDOCODE: Look up security by ISIN, NSE symbol, or BSE code."""
+        """
+        PSEUDOCODE:
+        1. Query securities where isin = identifier OR nse_symbol = identifier OR bse_code = identifier.
+        2. Return mapped Security domain entity if found, else None.
+        """
         res = self.conn.execute("""
             SELECT isin, company_name, listing_status, nse_symbol,
                    bse_code, bse_scrip_id, industry, face_value, is_active
@@ -83,6 +131,8 @@ class DuckDBManager:
         )
 
     def close(self) -> None:
-        """Close connection."""
+        """Close database connection."""
         self.conn.close()
+
+
 

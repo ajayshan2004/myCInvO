@@ -33,7 +33,11 @@ class Security:
     is_active: bool = True
 
     def __post_init__(self) -> None:
-        """PSEUDOCODE: Validate 12-char ISIN and at least one exchange symbol/code."""
+        """
+        PSEUDOCODE:
+        1. Validate ISIN is a valid 12-character alphanumeric code.
+        2. Ensure at least one exchange identifier (NSE symbol or BSE code) is present.
+        """
         if not self.isin or len(self.isin) != 12:
             raise ValueError(f"Invalid ISIN '{self.isin}': must be 12 chars.")
         if not self.nse_symbol and not self.bse_code:
@@ -57,11 +61,17 @@ class EODQuote:
     delivery_pct: float = 0.0
 
     def __post_init__(self) -> None:
-        """PSEUDOCODE: Validate prices >= 0, high >= low, vol >= deliv_vol, deliv_pct in [0, 100]."""
+        """
+        PSEUDOCODE:
+        1. Validate prices are non-negative and high >= low.
+        2. Validate total_volume >= deliverable_volume >= 0.
+        3. Constrain delivery_pct to the range [0.0, 100.0].
+        """
         if self.high_price < self.low_price or self.low_price < 0:
             raise ValueError(f"Invalid range: High={self.high_price}, Low={self.low_price}")
         if self.deliverable_volume > self.total_volume and self.total_volume > 0:
             raise ValueError("Deliverable volume cannot exceed total volume.")
         if not (0.0 <= self.delivery_pct <= 100.0):
             raise ValueError(f"Delivery pct {self.delivery_pct} must be within [0, 100].")
+
 

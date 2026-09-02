@@ -19,18 +19,31 @@ class ListingStatus(str, Enum):
     DUAL_LISTED = "DUAL_LISTED"
 
 
+class InstrumentType(str, Enum):
+    """Asset & Instrument classification across capital markets."""
+    EQUITY = "EQUITY"           # All listed equities (Mainboard + SME growth stocks)
+    ETF = "ETF"                 # Exchange Traded Funds (Index ETFs, Gold ETFs, Liquid ETFs)
+    MUTUAL_FUND = "MUTUAL_FUND" # Traditional Mutual Fund schemes
+    GOVT_BOND = "GOVT_BOND"     # G-Secs, Treasury Bills, and Sovereign Gold Bonds (SGBs)
+    CORP_BOND = "CORP_BOND"     # Corporate Debentures & Non-Convertible Debentures (NCDs)
+    REIT_INVIT = "REIT_INVIT"   # Real Estate (REIT) & Infrastructure (InvIT) Trusts
+
+
+
 @dataclass(frozen=True)
 class Security:
-    """Master equity entity using ISIN as universal identifier."""
+    """Master security entity using ISIN as universal identifier."""
     isin: str
     company_name: str
     listing_status: ListingStatus
+    instrument_type: InstrumentType = InstrumentType.EQUITY
     nse_symbol: Optional[str] = None
     bse_code: Optional[str] = None
     bse_scrip_id: Optional[str] = None
     industry: Optional[str] = None
     face_value: float = 10.0
     is_active: bool = True
+
 
     def __post_init__(self) -> None:
         """

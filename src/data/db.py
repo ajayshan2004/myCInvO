@@ -37,8 +37,8 @@ class DuckDBManager:
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS securities (
                 isin VARCHAR PRIMARY KEY, company_name VARCHAR NOT NULL,
-                listing_status VARCHAR NOT NULL, nse_symbol VARCHAR,
-                bse_code VARCHAR, bse_scrip_id VARCHAR, industry VARCHAR,
+                listing_status VARCHAR NOT NULL, instrument_type VARCHAR NOT NULL DEFAULT 'EQUITY',
+                nse_symbol VARCHAR, bse_code VARCHAR, bse_scrip_id VARCHAR, industry VARCHAR,
                 face_value DOUBLE DEFAULT 10.0, is_active BOOLEAN DEFAULT TRUE
             );
             CREATE TABLE IF NOT EXISTS eod_quotes (
@@ -79,18 +79,18 @@ class DuckDBManager:
     def upsert_securities(self, securities: List[Security]) -> int:
         """
         PSEUDOCODE:
-        1. Convert list of Security domain models into tuple records.
+        1. Convert list of Security domain models into tuple records with instrument_type.
         2. Execute batch INSERT OR REPLACE into securities table.
         3. Return total inserted record count.
         """
         if not securities:
             return 0
         records = [
-            (s.isin, s.company_name, s.listing_status.value, s.nse_symbol,
-             s.bse_code, s.bse_scrip_id, s.industry, s.face_value, s.is_active)
+            (s.isin, s.company_name, s.listing_status.value, s.instrument_type.value,
+             s.nse_symbol, s.bse_code, s.bse_scrip_id, s.industry, s.face_value, s.is_active)
             for s in securities
         ]
-        self.conn.executemany("INSERT OR REPLACE INTO securities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
+        self.conn.executemany("INSERT OR REPLACE INTO securities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
         return len(records)
 
     def upsert_eod_quotes(self, quotes: List[EODQuote]) -> int:
@@ -104,8 +104,8 @@ class DuckDBManager:
             return 0
         records = [
             (q.isin, q.symbol, q.exchange.value, q.trade_date, q.open_price,
-             q.high_price, q.low_price, q.close_price, q.prev_close,
-             q.total_volume, q.deliverable_volume, q.delivery_pct)
+              q.high_price, q.low_price, q.close_price, q.prev_close,
+              q.total_volume, q.deliverable_volume, q.delivery_pct)
             for q in quotes
         ]
         self.conn.executemany("INSERT OR REPLACE INTO eod_quotes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
@@ -115,20 +115,23 @@ class DuckDBManager:
         """
         PSEUDOCODE:
         1. Query securities where isin = identifier OR nse_symbol = identifier OR bse_code = identifier.
-        2. Return mapped Security domain entity if found, else None.
+        2. Return mapped Security domain entity with instrument_type, else None.
         """
         res = self.conn.execute("""
-            SELECT isin, company_name, listing_status, nse_symbol,
-                   bse_code, bse_scrip_id, industry, face_value, is_active
+            SELECT isin, company_name, listing_status, instrument_type,
+                   nse_symbol, bse_code, bse_scrip_id, industry, face_value, is_active
             FROM securities WHERE isin = ? OR nse_symbol = ? OR bse_code = ? LIMIT 1;
         """, (identifier, identifier, identifier)).fetchone()
         if not res:
             return None
+        from src.data.models import InstrumentType
         return Security(
             isin=res[0], company_name=res[1], listing_status=ListingStatus(res[2]),
-            nse_symbol=res[3], bse_code=res[4], bse_scrip_id=res[5],
-            industry=res[6], face_value=res[7], is_active=res[8]
+            instrument_type=InstrumentType(res[3]),
+            nse_symbol=res[4], bse_code=res[5], bse_scrip_id=res[6],
+            industry=res[7], face_value=res[8], is_active=res[9]
         )
+
 
     def close(self) -> None:
         """Close database connection."""

@@ -4,6 +4,7 @@ Purpose: Domain models for screener candidates, trend scores, and breakout setup
 """
 from dataclasses import dataclass
 from datetime import date
+from enum import Enum
 
 
 @dataclass
@@ -51,4 +52,28 @@ class VCPPattern:
     volume_dryup_detected: bool
     is_valid_vcp: bool
     breakout_detected: bool
+
+
+class SwingSetupType(str, Enum):
+    """Types of swing trading momentum and pullback setups."""
+    HIGH_TIGHT_FLAG = "HIGH_TIGHT_FLAG"
+    POCKET_PIVOT = "POCKET_PIVOT"
+    EMA_PULLBACK = "EMA_PULLBACK"
+
+
+@dataclass
+class SwingCandidate:
+    """Represents a qualified swing trade candidate with trade parameters."""
+    isin: str
+    symbol: str
+    company_name: str
+    trade_date: date
+    setup_type: SwingSetupType
+    close_price: float
+    entry_trigger_price: float
+    stop_loss_price: float
+    profit_target_price: float
+    risk_reward_ratio: float
+    score: float
+
 

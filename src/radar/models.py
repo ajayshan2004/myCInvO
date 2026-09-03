@@ -77,3 +77,20 @@ class SwingCandidate:
     score: float
 
 
+@dataclass
+class MultibaggerCandidate:
+    """Represents a multi-year base breakout or structural compounder candidate."""
+    isin: str
+    symbol: str
+    company_name: str
+    trade_date: date
+    close_price: float
+    multi_year_high: float
+    base_duration_months: int
+    ath_breakout: bool
+    weekly_30_ema: float
+    volume_surge_mult: float
+    trend_strength_score: float
+
+
+

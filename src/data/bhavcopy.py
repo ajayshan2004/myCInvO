@@ -31,9 +31,10 @@ class BhavcopyService:
         3. Extract prices, total volume, deliverable volume, and delivery %.
         4. Return list of valid EODQuote domain objects.
         """
-        reader = csv.DictReader(io.StringIO(csv_text))
+        reader = csv.DictReader(csv_text.splitlines())
         quotes: List[EODQuote] = []
         for row in reader:
+
             clean = {k.strip().upper(): v.strip() for k, v in row.items() if k and v}
             series = clean.get("SERIES", "")
             if series not in {"EQ", "BE", "SM", "BZ"}:
@@ -76,9 +77,10 @@ class BhavcopyService:
         3. Extract OHLC and total volume.
         4. Return list of valid EODQuote domain objects.
         """
-        reader = csv.DictReader(io.StringIO(csv_text))
+        reader = csv.DictReader(csv_text.splitlines())
         quotes: List[EODQuote] = []
         for row in reader:
+
             clean = {k.strip().upper(): v.strip() for k, v in row.items() if k and v}
             sc_code = clean.get("SC_CODE", clean.get("SCRIP_CD", ""))
             symbol = clean.get("SC_NAME", clean.get("SCRIP_NAME", sc_code))

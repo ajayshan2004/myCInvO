@@ -16,9 +16,12 @@ def mock_historical_setup():
     """Isolated in-memory database and mocked HTTP client fixture."""
     db = DuckDBManager(":memory:")
     mock_http = MagicMock(spec=NSEBSEHttpClient)
+    mock_http.fetch_nse_master.return_value = None
+    mock_http.fetch_bse_master.return_value = None
     engine = HistoricalIngestionEngine(db, mock_http)
     yield engine, db, mock_http
     engine.close()
+
 
 
 def test_get_missing_trading_days(mock_historical_setup):

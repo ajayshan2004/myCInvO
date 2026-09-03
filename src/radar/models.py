@@ -27,3 +27,28 @@ class ScreenerCandidate:
     avg_deliv_volume_50: float
     deliv_volume_multiplier: float
     trend_score: float
+
+
+@dataclass
+class Contraction:
+    """Represents a single contraction wave within a base."""
+    depth_pct: float
+    duration_bars: int
+    peak_price: float
+    trough_price: float
+
+
+@dataclass
+class VCPPattern:
+    """Represents a Volatility Contraction Pattern (VCP) setup."""
+    isin: str
+    symbol: str
+    company_name: str
+    base_length_bars: int
+    contractions: list[Contraction]
+    pivot_price: float
+    final_contraction_depth_pct: float
+    volume_dryup_detected: bool
+    is_valid_vcp: bool
+    breakout_detected: bool
+

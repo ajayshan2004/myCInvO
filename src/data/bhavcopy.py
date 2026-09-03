@@ -108,19 +108,40 @@ class BhavcopyService:
         """
         PSEUDOCODE:
         1. Check delta key 'bhavcopy_{exchange}_{date}'. If exists, skip (return 0).
-        2. Parse exchange CSV into EODQuote models.
-        3. Batch upsert quotes to DuckDB.
-        4. Record delta key in system_metadata.
-        5. Notify registered downstream listeners.
+        2. If id_lookup is None, build lookup map from DuckDB securities table.
+        3. Parse exchange CSV into EODQuote models.
+        4. Batch upsert quotes to DuckDB.
+        5. Record delta key in system_metadata.
+        6. Notify registered downstream listeners.
         """
         delta_key = f"bhavcopy_{exchange.value}_{trade_date.isoformat()}"
         if self.db.get_metadata(delta_key):
             return 0  # Principle #2: Delta skip
 
+        lookup = id_lookup
+        if lookup is None:
+            if exchange == Exchange.NSE:
+                rows = self.db.conn.execute(
+                    "SELECT nse_symbol, isin FROM securities WHERE nse_symbol IS NOT NULL;"
+                ).fetchall()
+                lookup = {r[0]: r[1] for r in rows}
+            else:
+                rows = self.db.conn.execute(
+                    "SELECT bse_code, isin FROM securities WHERE bse_code IS NOT NULL;"
+                ).fetchall()
+                lookup = {r[0]: r[1] for r in rows}
+
         if exchange == Exchange.NSE:
-            quotes = self.parse_nse_bhavcopy(csv_text, trade_date, id_lookup)
+            quotes = self.parse_nse_bhavcopy(csv_text, trade_date, lookup)
         else:
-            quotes = self.parse_bse_bhavcopy(csv_text, trade_date, id_lookup)
+            raw_bse_quotes = self.parse_bse_bhavcopy(csv_text, trade_date, lookup)
+            # Find ISINs already stored for this date from primary exchange (NSE)
+            existing_isins = {
+                r[0] for r in self.db.conn.execute(
+                    "SELECT isin FROM eod_quotes WHERE trade_date = ?;", (trade_date,)
+                ).fetchall()
+            }
+            quotes = [q for q in raw_bse_quotes if q.isin not in existing_isins]
 
         count = self.db.upsert_eod_quotes(quotes)
         self.db.set_metadata(delta_key, f"records:{count}")
@@ -130,3 +151,5 @@ class BhavcopyService:
             listener(exchange, trade_date, count)
 
         return count
+
+

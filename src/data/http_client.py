@@ -17,12 +17,16 @@ class NSEBSEHttpClient:
     def __init__(self, timeout_seconds: int = 15) -> None:
         self.timeout = timeout_seconds
         self.session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections=35, pool_maxsize=35, max_retries=3)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "application/json,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://www.bseindia.com/",
         })
+
 
     def fetch_nse_master(self) -> Optional[str]:
         """
@@ -62,4 +66,26 @@ class NSEBSEHttpClient:
             return resp.text if resp.status_code == 200 else None
         except requests.RequestException:
             return None
+
+    def fetch_bse_bhavcopy(self, trade_date: date) -> Optional[str]:
+        """
+        PSEUDOCODE:
+        1. Format trade_date as ddMMyy (e.g., 150124).
+        2. Send GET request to official BSE Bhavcopy ZIP archive.
+        3. If 200 OK, unzip in-memory and return decoded CSV text; else None.
+        """
+        import io
+        import zipfile
+        formatted_date = trade_date.strftime("%d%m%y")
+        url = f"https://www.bseindia.com/download/BhavCopy/Equity/EQ{formatted_date}_CSV.ZIP"
+        try:
+            resp = self.session.get(url, timeout=self.timeout)
+            if resp.status_code == 200:
+                with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
+                    first_file = z.namelist()[0]
+                    return z.read(first_file).decode("utf-8", errors="ignore")
+            return None
+        except (requests.RequestException, zipfile.BadZipFile):
+            return None
+
 

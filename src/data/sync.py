@@ -39,19 +39,28 @@ class MarketDataSync:
         """
         PSEUDOCODE:
         1. Check delta guard for NSE and BSE on trade_date.
-        2. If missing, download Bhavcopy and ingest quotes.
-        3. Return dictionary of ingested record counts per exchange.
+        2. If NSE missing, download NSE Bhavcopy and ingest.
+        3. If BSE missing, download BSE Bhavcopy and ingest.
+        4. Return dictionary of ingested record counts per exchange.
         """
         results = {"NSE": 0, "BSE": 0}
         nse_delta_key = f"bhavcopy_NSE_{trade_date.isoformat()}"
+        bse_delta_key = f"bhavcopy_BSE_{trade_date.isoformat()}"
 
-        # Only download if delta is missing
+        # 1. Delta check and ingest NSE
         if not self.db.get_metadata(nse_delta_key):
             nse_csv = self.http.fetch_nse_bhavcopy(trade_date)
             if nse_csv:
                 results["NSE"] = self.bhavcopy_svc.ingest_bhavcopy(Exchange.NSE, trade_date, nse_csv)
 
+        # 2. Delta check and ingest BSE
+        if not self.db.get_metadata(bse_delta_key):
+            bse_csv = self.http.fetch_bse_bhavcopy(trade_date)
+            if bse_csv:
+                results["BSE"] = self.bhavcopy_svc.ingest_bhavcopy(Exchange.BSE, trade_date, bse_csv)
+
         return results
+
 
     def run_daily_sync(self, target_date: Optional[date] = None) -> Dict[str, any]:
         """
@@ -77,8 +86,16 @@ class MarketDataSync:
             "quotes_ingested": quote_updates,
         }
 
+    def close(self) -> None:
+        """PSEUDOCODE: Close underlying database connection."""
+        self.db.close()
+
 
 if __name__ == "__main__":
     sync_engine = MarketDataSync()
-    summary = sync_engine.run_daily_sync()
-    print(f"Sync Complete: {summary}")
+    try:
+        summary = sync_engine.run_daily_sync()
+        print(f"Sync Complete: {summary}")
+    finally:
+        sync_engine.close()
+

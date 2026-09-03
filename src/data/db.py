@@ -48,7 +48,7 @@ class DuckDBManager:
                 low_price DOUBLE NOT NULL, close_price DOUBLE NOT NULL,
                 prev_close DOUBLE NOT NULL, total_volume BIGINT NOT NULL,
                 deliverable_volume BIGINT DEFAULT 0, delivery_pct DOUBLE DEFAULT 0.0,
-                PRIMARY KEY (isin, exchange, trade_date)
+                PRIMARY KEY (isin, trade_date)
             );
             CREATE TABLE IF NOT EXISTS system_metadata (
                 key VARCHAR PRIMARY KEY,
@@ -56,6 +56,7 @@ class DuckDBManager:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
 
     def set_metadata(self, key: str, value: str) -> None:
         """
@@ -79,37 +80,74 @@ class DuckDBManager:
     def upsert_securities(self, securities: List[Security]) -> int:
         """
         PSEUDOCODE:
-        1. Convert list of Security domain models into tuple records with instrument_type.
-        2. Execute batch INSERT OR REPLACE into securities table.
+        1. If pyarrow is available, convert list to PyArrow Table and bulk INSERT OR REPLACE.
+        2. Else fallback to executemany.
         3. Return total inserted record count.
         """
         if not securities:
             return 0
-        records = [
-            (s.isin, s.company_name, s.listing_status.value, s.instrument_type.value,
-             s.nse_symbol, s.bse_code, s.bse_scrip_id, s.industry, s.face_value, s.is_active)
-            for s in securities
-        ]
-        self.conn.executemany("INSERT OR REPLACE INTO securities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
-        return len(records)
+        try:
+            import pyarrow as pa
+            tbl = pa.table({
+                "isin": [s.isin for s in securities],
+                "company_name": [s.company_name for s in securities],
+                "listing_status": [s.listing_status.value for s in securities],
+                "instrument_type": [s.instrument_type.value for s in securities],
+                "nse_symbol": [s.nse_symbol for s in securities],
+                "bse_code": [s.bse_code for s in securities],
+                "bse_scrip_id": [s.bse_scrip_id for s in securities],
+                "industry": [s.industry for s in securities],
+                "face_value": [s.face_value for s in securities],
+                "is_active": [s.is_active for s in securities],
+            })
+            self.conn.execute("INSERT OR REPLACE INTO securities SELECT * FROM tbl;")
+        except ImportError:
+            records = [
+                (s.isin, s.company_name, s.listing_status.value, s.instrument_type.value,
+                 s.nse_symbol, s.bse_code, s.bse_scrip_id, s.industry, s.face_value, s.is_active)
+                for s in securities
+            ]
+            self.conn.executemany("INSERT OR REPLACE INTO securities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
+        return len(securities)
 
     def upsert_eod_quotes(self, quotes: List[EODQuote]) -> int:
         """
         PSEUDOCODE:
-        1. Convert list of EODQuote models into tuple records.
-        2. Execute batch INSERT OR REPLACE into eod_quotes table.
+        1. If pyarrow is available, convert list to PyArrow Table and bulk INSERT OR REPLACE.
+        2. Else fallback to executemany.
         3. Return count of processed quotes.
         """
         if not quotes:
             return 0
-        records = [
-            (q.isin, q.symbol, q.exchange.value, q.trade_date, q.open_price,
-              q.high_price, q.low_price, q.close_price, q.prev_close,
-              q.total_volume, q.deliverable_volume, q.delivery_pct)
-            for q in quotes
-        ]
-        self.conn.executemany("INSERT OR REPLACE INTO eod_quotes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
-        return len(records)
+        try:
+            import pyarrow as pa
+            tbl = pa.table({
+                "isin": [q.isin for q in quotes],
+                "symbol": [q.symbol for q in quotes],
+                "exchange": [q.exchange.value for q in quotes],
+                "trade_date": [q.trade_date for q in quotes],
+                "open_price": [q.open_price for q in quotes],
+                "high_price": [q.high_price for q in quotes],
+                "low_price": [q.low_price for q in quotes],
+                "close_price": [q.close_price for q in quotes],
+                "prev_close": [q.prev_close for q in quotes],
+                "total_volume": [q.total_volume for q in quotes],
+                "deliverable_volume": [q.deliverable_volume for q in quotes],
+                "delivery_pct": [q.delivery_pct for q in quotes],
+            })
+            self.conn.execute("INSERT OR REPLACE INTO eod_quotes SELECT * FROM tbl;")
+        except ImportError:
+            records = [
+                (q.isin, q.symbol, q.exchange.value, q.trade_date, q.open_price,
+                  q.high_price, q.low_price, q.close_price, q.prev_close,
+                  q.total_volume, q.deliverable_volume, q.delivery_pct)
+                for q in quotes
+            ]
+            self.conn.executemany("INSERT OR REPLACE INTO eod_quotes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
+        return len(quotes)
+
+
+
 
     def get_security(self, identifier: str) -> Optional[Security]:
         """

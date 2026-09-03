@@ -1,0 +1,56 @@
+# ==============================================================================
+# ALPHACRAFT: CENTRALIZED QUANTITATIVE RULES & STRATEGY CONFIGURATION
+# ==============================================================================
+
+market_regime:
+  bull_threshold: 75.0
+  neutral_threshold: 45.0
+  lookback_days: 252
+  vix_elevated_threshold: 18.0
+  vix_extreme_threshold: 24.0
+
+swing_portfolio:
+  enabled: true
+  min_rally_pct: 40.0
+  max_rally_days: 20
+  max_flag_pullback_pct: 12.0
+  flag_volume_dryup_ratio: 0.40
+  pocket_pivot_volume_mult: 1.25
+  initial_stop_loss_pct: 4.5
+  profit_target_tranche1_pct: 10.0
+  max_holding_days: 15
+
+positional_portfolio:
+  enabled: true
+  minervini_200_dma_slope_days: 20
+  min_above_52w_low_pct: 30.0
+  within_52w_high_pct: 15.0
+  mansfield_rs_threshold: 5.0
+  vcp_max_contractions: 4
+  vcp_final_contraction_max_pct: 6.0
+  delivery_volume_multiplier: 2.0
+  initial_stop_loss_pct: 7.0
+  pyramid_tranches: [0.50, 0.30, 0.20]
+
+multibagger_portfolio:
+  enabled: true
+  min_base_duration_months: 24
+  min_pat_growth_yoy_pct: 25.0
+  min_sales_growth_yoy_pct: 20.0
+  min_opm_expansion_bps: 150
+  min_roce_pct: 18.0
+  max_promoter_pledge_pct: 10.0
+  trailing_stop_weekly_ema: 30
+
+forensic_shield:
+  min_market_cap_cr: 100.0
+  max_debt_to_equity: 1.5
+  min_cfo_to_ebitda: 0.70
+  max_promoter_pledge_pct: 15.0
+  exclude_asm_gsm: true
+
+risk_management:
+  max_risk_per_trade_pct: 1.0
+  max_portfolio_heat_pct: 6.0
+  max_single_stock_allocation_pct: 15.0
+  max_single_sector_allocation_pct: 25.0

@@ -11,12 +11,12 @@ from src.data.models import Security, EODQuote, ListingStatus
 class DuckDBManager:
     """Manages DuckDB analytical database connection and schemas."""
 
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: Optional[str] = None, read_only: bool = False) -> None:
         """
         PSEUDOCODE:
-        1. Default to '.data/alphacraft.duckdb' if db_path is None.
-        2. Create parent directories if required.
-        3. Connect to DuckDB and initialize schema tables.
+        1. Set db_path to default '.data/alphacraft.duckdb' if None.
+        2. Open DuckDB connection with read_only flag.
+        3. If not read_only, initialize schema tables.
         """
         if db_path is None:
             data_dir = Path(".data")
@@ -24,8 +24,9 @@ class DuckDBManager:
             self.db_path = str(data_dir / "alphacraft.duckdb")
         else:
             self.db_path = db_path
-        self.conn = duckdb.connect(self.db_path)
-        self._init_schema()
+        self.conn = duckdb.connect(self.db_path, read_only=read_only)
+        if not read_only:
+            self._init_schema()
 
     def _init_schema(self) -> None:
         """

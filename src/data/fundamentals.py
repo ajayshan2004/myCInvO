@@ -13,9 +13,12 @@ class FundamentalsEngine:
     """Evaluates CANSLIM fundamental growth, institutional ownership, and forensic risk filters."""
 
     def __init__(
-        self, db_manager: Optional[DuckDBManager] = None, config_manager: Optional[ConfigManager] = None
+        self,
+        db_manager: Optional[DuckDBManager] = None,
+        config_manager: Optional[ConfigManager] = None,
+        read_only: bool = False,
     ) -> None:
-        self.db = db_manager or DuckDBManager()
+        self.db = db_manager or DuckDBManager(read_only=read_only)
         self.config_manager = config_manager or ConfigManager()
         self.config = self.config_manager.get_config()
 
@@ -126,6 +129,10 @@ class FundamentalsEngine:
         ).fetchone()
         pledged = row[0] if row else 0.0
 
+        # Also check dynamic surveillance list if is_asm_gsm is False
+        if not is_asm_gsm:
+            is_asm_gsm = self.is_surveilled(isin)
+
         pass_pledge = pledged <= f_cfg.max_promoter_pledge_pct
         pass_debt = debt_to_equity <= f_cfg.max_debt_to_equity
         pass_mcap = market_cap_cr >= f_cfg.min_market_cap_cr
@@ -140,3 +147,68 @@ class FundamentalsEngine:
             "pass_mcap": pass_mcap, "pass_surveillance": pass_surveillance,
             "pledged_pct": round(pledged, 2), "debt_to_equity": round(debt_to_equity, 2)
         }
+
+    def fetch_and_ingest_metrics(self, isin: str, bse_code: str, http_client: Optional[Any] = None) -> Optional[Dict[str, Any]]:
+        """
+        PSEUDOCODE:
+        1. Query official BSE ComHeader API for scripcode.
+        2. Parse P/E, EPS, face value, industry, sector, group.
+        3. Return dictionary of parsed company profile metrics.
+        """
+        from src.data.http_client import NSEBSEHttpClient
+        http = http_client or NSEBSEHttpClient()
+        url = f"https://api.bseindia.com/BseIndiaAPI/api/ComHeader/w?scripcode={bse_code}"
+        try:
+            resp = http.session.get(url, timeout=http.timeout)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, dict) and data.get("SecurityCode"):
+                    return {
+                        "isin": isin, "bse_code": bse_code,
+                        "pe_ratio": float(data.get("PE", 0.0)) if data.get("PE") not in ("-", "", None) else 0.0,
+                        "eps": float(data.get("EPS", 0.0)) if data.get("EPS") not in ("-", "", None) else 0.0,
+                        "industry": data.get("IndustryNew") or data.get("Industry", ""),
+                        "sector": data.get("Sector", ""),
+                    }
+        except Exception:
+            pass
+        return None
+
+    def sync_surveillance_list(self, http_client: Optional[Any] = None) -> set:
+        """
+        PSEUDOCODE:
+        1. Fetch official exchange surveillance report (ASM / GSM announcements).
+        2. Extract list of surveilled securities / ISINs / codes.
+        3. Cache in DuckDB system_metadata under key 'surveillance_asm_gsm'.
+        4. Return set of surveilled identifiers.
+        """
+        import json, re
+        from src.data.http_client import NSEBSEHttpClient
+        http = http_client or NSEBSEHttpClient()
+        url = "https://www.bseindia.com/markets/equity/EQReports/sur_announcements.aspx"
+        surveilled_set = set()
+        try:
+            resp = http.session.get(url, timeout=http.timeout)
+            if resp.status_code == 200 and resp.text:
+                # Find all 6-digit BSE scrip codes or 12-char ISINs mentioned in table
+                found_codes = re.findall(r"\b\d{6}\b", resp.text)
+                found_isins = re.findall(r"\bINE[A-Z0-9]{9}\b", resp.text)
+                surveilled_set.update(found_codes)
+                surveilled_set.update(found_isins)
+        except Exception:
+            pass
+
+        self.db.set_metadata("surveillance_asm_gsm", json.dumps(list(surveilled_set)))
+        return surveilled_set
+
+    def is_surveilled(self, identifier: str) -> bool:
+        """Check if identifier (ISIN or BSE Code) is in cached surveillance list."""
+        import json
+        raw = self.db.get_metadata("surveillance_asm_gsm")
+        if not raw:
+            return False
+        try:
+            return identifier in set(json.loads(raw))
+        except Exception:
+            return False
+

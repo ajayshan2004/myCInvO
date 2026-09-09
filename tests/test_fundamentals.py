@@ -101,3 +101,39 @@ def test_forensic_shield_clean_and_rejections(fund_setup):
     surveillance_eval = engine.evaluate_forensic_shield(isin_clean, debt_to_equity=0.3, is_asm_gsm=True, market_cap_cr=1200.0)
     assert surveillance_eval["is_clean"] is False
     assert surveillance_eval["pass_surveillance"] is False
+
+
+def test_fetch_metrics_and_surveillance_sync(fund_setup):
+    """Verify company profile metric fetching and surveillance sync."""
+    engine, db = fund_setup
+    from unittest.mock import MagicMock
+
+    # Mock HTTP client for BSE ComHeader
+    mock_http = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "SecurityCode": "500325", "PE": "18.5", "EPS": "42.0",
+        "IndustryNew": "Refineries", "Sector": "Energy"
+    }
+    mock_http.session.get.return_value = mock_resp
+    mock_http.timeout = 5
+
+    res = engine.fetch_and_ingest_metrics("INE002A01018", "500325", http_client=mock_http)
+    assert res is not None
+    assert res["pe_ratio"] == 18.5
+    assert res["eps"] == 42.0
+    assert res["sector"] == "Energy"
+
+    # Mock surveillance list HTML page
+    mock_sur_resp = MagicMock()
+    mock_sur_resp.status_code = 200
+    mock_sur_resp.text = "<table><tr><td>500999</td><td>INE999A01099</td><td>Shortlisted under GSM Stage 1</td></tr></table>"
+    mock_http.session.get.return_value = mock_sur_resp
+
+    sur_set = engine.sync_surveillance_list(http_client=mock_http)
+    assert "INE999A01099" in sur_set
+    assert "500999" in sur_set
+    assert engine.is_surveilled("INE999A01099") is True
+    assert engine.is_surveilled("INE000000000") is False
+

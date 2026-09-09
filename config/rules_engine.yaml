@@ -54,3 +54,31 @@ risk_management:
   max_portfolio_heat_pct: 6.0
   max_single_stock_allocation_pct: 15.0
   max_single_sector_allocation_pct: 25.0
+
+indices:
+  benchmarks:
+    - "Nifty 50"
+    - "Nifty Next 50"
+    - "Nifty 100"
+    - "Nifty 200"
+    - "Nifty 500"
+    - "Nifty Midcap 150"
+    - "Nifty Smallcap 250"
+    - "Nifty Microcap 250"
+    - "India VIX"
+  sectors:
+    - "Nifty IT"
+    - "Nifty Auto"
+    - "Nifty Pharma"
+    - "Nifty Metal"
+    - "Nifty Bank"
+    - "Nifty FMCG"
+    - "Nifty Realty"
+    - "Nifty Energy"
+    - "Nifty PSU Bank"
+    - "Nifty Infrastructure"
+    - "Nifty Financial Services"
+    - "Nifty Media"
+    - "Nifty Healthcare"
+    - "Nifty Oil & Gas"
+

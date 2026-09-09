@@ -5,7 +5,7 @@ Purpose: DuckDB local analytical database manager for securities and quotes.
 from pathlib import Path
 from typing import List, Optional
 import duckdb
-from src.data.models import Security, EODQuote, ListingStatus
+from src.data.models import Security, EODQuote, IndexQuote, QuarterlyFinancial, ShareholdingPattern, ListingStatus
 
 
 class DuckDBManager:
@@ -33,7 +33,10 @@ class DuckDBManager:
         PSEUDOCODE:
         1. Create 'securities' master table (PK: isin).
         2. Create 'eod_quotes' time-series table (PK: isin, exchange, trade_date).
-        3. Create 'system_metadata' table (PK: key) for delta hashing and state.
+        3. Create 'index_quotes' table (PK: index_name, trade_date).
+        4. Create 'quarterly_financials' table (PK: isin, period_end).
+        5. Create 'shareholding_patterns' table (PK: isin, period_end).
+        6. Create 'system_metadata' table (PK: key) for delta hashing and state.
         """
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS securities (
@@ -50,6 +53,29 @@ class DuckDBManager:
                 prev_close DOUBLE NOT NULL, total_volume BIGINT NOT NULL,
                 deliverable_volume BIGINT DEFAULT 0, delivery_pct DOUBLE DEFAULT 0.0,
                 PRIMARY KEY (isin, trade_date)
+            );
+            CREATE TABLE IF NOT EXISTS index_quotes (
+                index_name VARCHAR NOT NULL, trade_date DATE NOT NULL,
+                open_price DOUBLE NOT NULL, high_price DOUBLE NOT NULL,
+                low_price DOUBLE NOT NULL, close_price DOUBLE NOT NULL,
+                change_pct DOUBLE DEFAULT 0.0, pe_ratio DOUBLE DEFAULT 0.0,
+                pb_ratio DOUBLE DEFAULT 0.0, div_yield DOUBLE DEFAULT 0.0,
+                PRIMARY KEY (index_name, trade_date)
+            );
+            CREATE TABLE IF NOT EXISTS quarterly_financials (
+                isin VARCHAR NOT NULL, symbol VARCHAR NOT NULL, period_end DATE NOT NULL,
+                sales_cr DOUBLE NOT NULL, operating_profit_cr DOUBLE NOT NULL,
+                opm_pct DOUBLE NOT NULL, net_profit_cr DOUBLE NOT NULL,
+                pat_growth_yoy DOUBLE DEFAULT 0.0, sales_growth_yoy DOUBLE DEFAULT 0.0,
+                eps DOUBLE DEFAULT 0.0,
+                PRIMARY KEY (isin, period_end)
+            );
+            CREATE TABLE IF NOT EXISTS shareholding_patterns (
+                isin VARCHAR NOT NULL, symbol VARCHAR NOT NULL, period_end DATE NOT NULL,
+                promoter_pct DOUBLE NOT NULL, fii_pct DOUBLE NOT NULL, dii_pct DOUBLE NOT NULL,
+                public_retail_pct DOUBLE NOT NULL, pledged_pct DOUBLE DEFAULT 0.0,
+                retail_shareholders_count BIGINT DEFAULT 0,
+                PRIMARY KEY (isin, period_end)
             );
             CREATE TABLE IF NOT EXISTS system_metadata (
                 key VARCHAR PRIMARY KEY,
@@ -147,8 +173,101 @@ class DuckDBManager:
             self.conn.executemany("INSERT OR REPLACE INTO eod_quotes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
         return len(quotes)
 
+    def upsert_index_quotes(self, quotes: List[IndexQuote]) -> int:
+        """
+        PSEUDOCODE:
+        1. If pyarrow is available, convert list to PyArrow Table and bulk INSERT OR REPLACE.
+        2. Else fallback to executemany.
+        3. Return count of processed index quotes.
+        """
+        if not quotes:
+            return 0
+        try:
+            import pyarrow as pa
+            tbl = pa.table({
+                "index_name": [q.index_name for q in quotes],
+                "trade_date": [q.trade_date for q in quotes],
+                "open_price": [q.open_price for q in quotes],
+                "high_price": [q.high_price for q in quotes],
+                "low_price": [q.low_price for q in quotes],
+                "close_price": [q.close_price for q in quotes],
+                "change_pct": [q.change_pct for q in quotes],
+                "pe_ratio": [q.pe_ratio for q in quotes],
+                "pb_ratio": [q.pb_ratio for q in quotes],
+                "div_yield": [q.div_yield for q in quotes],
+            })
+            self.conn.execute("INSERT OR REPLACE INTO index_quotes SELECT * FROM tbl;")
+        except ImportError:
+            records = [
+                (q.index_name, q.trade_date, q.open_price, q.high_price, q.low_price,
+                 q.close_price, q.change_pct, q.pe_ratio, q.pb_ratio, q.div_yield)
+                for q in quotes
+            ]
+            self.conn.executemany("INSERT OR REPLACE INTO index_quotes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", records)
+        return len(quotes)
 
+    def upsert_quarterly_financials(self, records: List[QuarterlyFinancial]) -> int:
+        """
+        PSEUDOCODE:
+        1. Bulk INSERT OR REPLACE into quarterly_financials using PyArrow or executemany.
+        2. Return processed records count.
+        """
+        if not records:
+            return 0
+        try:
+            import pyarrow as pa
+            tbl = pa.table({
+                "isin": [r.isin for r in records],
+                "symbol": [r.symbol for r in records],
+                "period_end": [r.period_end for r in records],
+                "sales_cr": [r.sales_cr for r in records],
+                "operating_profit_cr": [r.operating_profit_cr for r in records],
+                "opm_pct": [r.opm_pct for r in records],
+                "net_profit_cr": [r.net_profit_cr for r in records],
+                "pat_growth_yoy": [r.pat_growth_yoy for r in records],
+                "sales_growth_yoy": [r.sales_growth_yoy for r in records],
+                "eps": [r.eps for r in records],
+            })
+            self.conn.execute("INSERT OR REPLACE INTO quarterly_financials SELECT * FROM tbl;")
+        except ImportError:
+            tuples = [
+                (r.isin, r.symbol, r.period_end, r.sales_cr, r.operating_profit_cr,
+                 r.opm_pct, r.net_profit_cr, r.pat_growth_yoy, r.sales_growth_yoy, r.eps)
+                for r in records
+            ]
+            self.conn.executemany("INSERT OR REPLACE INTO quarterly_financials VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", tuples)
+        return len(records)
 
+    def upsert_shareholding_patterns(self, records: List[ShareholdingPattern]) -> int:
+        """
+        PSEUDOCODE:
+        1. Bulk INSERT OR REPLACE into shareholding_patterns using PyArrow or executemany.
+        2. Return processed records count.
+        """
+        if not records:
+            return 0
+        try:
+            import pyarrow as pa
+            tbl = pa.table({
+                "isin": [r.isin for r in records],
+                "symbol": [r.symbol for r in records],
+                "period_end": [r.period_end for r in records],
+                "promoter_pct": [r.promoter_pct for r in records],
+                "fii_pct": [r.fii_pct for r in records],
+                "dii_pct": [r.dii_pct for r in records],
+                "public_retail_pct": [r.public_retail_pct for r in records],
+                "pledged_pct": [r.pledged_pct for r in records],
+                "retail_shareholders_count": [r.retail_shareholders_count for r in records],
+            })
+            self.conn.execute("INSERT OR REPLACE INTO shareholding_patterns SELECT * FROM tbl;")
+        except ImportError:
+            tuples = [
+                (r.isin, r.symbol, r.period_end, r.promoter_pct, r.fii_pct, r.dii_pct,
+                 r.public_retail_pct, r.pledged_pct, r.retail_shareholders_count)
+                for r in records
+            ]
+            self.conn.executemany("INSERT OR REPLACE INTO shareholding_patterns VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", tuples)
+        return len(records)
 
     def get_security(self, identifier: str) -> Optional[Security]:
         """

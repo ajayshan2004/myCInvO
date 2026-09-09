@@ -88,3 +88,49 @@ class EODQuote:
             raise ValueError(f"Delivery pct {self.delivery_pct} must be within [0, 100].")
 
 
+@dataclass(frozen=True)
+class IndexQuote:
+    """Benchmark and sectoral index daily time-series metrics."""
+    index_name: str
+    trade_date: date
+    open_price: float
+    high_price: float
+    low_price: float
+    close_price: float
+    change_pct: float = 0.0
+    pe_ratio: float = 0.0
+    pb_ratio: float = 0.0
+    div_yield: float = 0.0
+
+
+@dataclass(frozen=True)
+class QuarterlyFinancial:
+    """Quarterly corporate financial results for CANSLIM acceleration analysis."""
+    isin: str
+    symbol: str
+    period_end: date
+    sales_cr: float
+    operating_profit_cr: float
+    opm_pct: float
+    net_profit_cr: float
+    pat_growth_yoy: float = 0.0
+    sales_growth_yoy: float = 0.0
+    eps: float = 0.0
+
+
+@dataclass(frozen=True)
+class ShareholdingPattern:
+    """Quarterly institutional and promoter ownership footprint."""
+    isin: str
+    symbol: str
+    period_end: date
+    promoter_pct: float
+    fii_pct: float
+    dii_pct: float
+    public_retail_pct: float
+    pledged_pct: float = 0.0
+    retail_shareholders_count: int = 0
+
+
+
+

@@ -67,11 +67,30 @@ class ForensicShieldConfig:
 
 
 @dataclass
+@dataclass
 class RiskManagementConfig:
     max_risk_per_trade_pct: float = 1.0
     max_portfolio_heat_pct: float = 6.0
     max_single_stock_allocation_pct: float = 15.0
     max_single_sector_allocation_pct: float = 25.0
+
+
+@dataclass
+class IndicesConfig:
+    benchmarks: List[str] = field(default_factory=lambda: [
+        "Nifty 50", "Nifty Next 50", "Nifty 100", "Nifty 200", "Nifty 500",
+        "Nifty Midcap 150", "Nifty Smallcap 250", "Nifty Microcap 250", "India VIX"
+    ])
+    sectors: List[str] = field(default_factory=lambda: [
+        "Nifty IT", "Nifty Auto", "Nifty Pharma", "Nifty Metal", "Nifty Bank",
+        "Nifty FMCG", "Nifty Realty", "Nifty Energy", "Nifty PSU Bank",
+        "Nifty Infrastructure", "Nifty Financial Services", "Nifty Media",
+        "Nifty Healthcare", "Nifty Oil & Gas"
+    ])
+
+    @property
+    def tracked_set(self) -> set:
+        return set(self.benchmarks + self.sectors)
 
 
 @dataclass
@@ -82,6 +101,7 @@ class RulesConfig:
     multibagger_portfolio: MultibaggerPortfolioConfig = field(default_factory=MultibaggerPortfolioConfig)
     forensic_shield: ForensicShieldConfig = field(default_factory=ForensicShieldConfig)
     risk_management: RiskManagementConfig = field(default_factory=RiskManagementConfig)
+    indices: IndicesConfig = field(default_factory=IndicesConfig)
 
 
 class ConfigManager:
@@ -122,6 +142,7 @@ class ConfigManager:
             multibagger_portfolio=MultibaggerPortfolioConfig(**raw.get("multibagger_portfolio", {})),
             forensic_shield=ForensicShieldConfig(**raw.get("forensic_shield", {})),
             risk_management=RiskManagementConfig(**raw.get("risk_management", {})),
+            indices=IndicesConfig(**raw.get("indices", {})),
         )
         self._validate_config(config)
         return config

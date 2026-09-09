@@ -52,10 +52,14 @@ class PortfolioScoringEngine:
         """
         # Fundamental & Forensic evaluation
         earnings_data = self.fundamentals.calculate_earnings_acceleration(isin)
+        has_earnings = earnings_data.get("has_data", False)
         earnings_score = earnings_data.get("earnings_score", 0.0)
 
         smart_money_data = self.fundamentals.calculate_smart_money_trend(isin)
+        has_smart_money = smart_money_data.get("has_data", False)
         smart_money_score = smart_money_data.get("smart_money_score", 0.0)
+
+        has_fundamental_data = has_earnings and has_smart_money
 
         forensic_data = self.fundamentals.evaluate_forensic_shield(
             isin, debt_to_equity=debt_to_equity, is_asm_gsm=is_asm_gsm, market_cap_cr=market_cap_cr
@@ -72,36 +76,47 @@ class PortfolioScoringEngine:
         )
         swing_score = round(min(100.0, max(0.0, swing_raw)), 1)
 
-        # 2. Positional Score (1-6 months): Stage-2 Trend + VCP + Momentum + Volume + Earnings
-        positional_raw = (
-            (trend_score * 0.30)
-            + (vcp_score * 0.25)
-            + (momentum_score * 0.20)
-            + (volume_footprint_score * 0.15)
-            + (earnings_score * 0.10)
-        )
+        # 2. Positional Score (1-6 months): Stage-2 Trend + VCP + Momentum + Volume (+ Earnings if available)
+        if has_earnings:
+            positional_raw = (
+                (trend_score * 0.30)
+                + (vcp_score * 0.25)
+                + (momentum_score * 0.20)
+                + (volume_footprint_score * 0.15)
+                + (earnings_score * 0.10)
+            )
+        else:
+            positional_raw = (
+                (trend_score * 0.35)
+                + (vcp_score * 0.25)
+                + (momentum_score * 0.20)
+                + (volume_footprint_score * 0.20)
+            )
         positional_score = round(min(100.0, max(0.0, positional_raw)), 1)
 
-        # 3. Multibagger Score (6m-3y+): Multi-Year Base + Earnings Accel + Smart Money + Trend + Forensics
-        multibagger_raw = (
-            (multibagger_base_score * 0.30)
-            + (earnings_score * 0.25)
-            + (smart_money_score * 0.20)
-            + (trend_score * 0.15)
-            + (forensic_score * 0.10)
-        )
-        multibagger_score = round(min(100.0, max(0.0, multibagger_raw)), 1)
+        # 3. Multibagger Score (6m-3y+): STRICT GUARD - require quarterly filings & smart money
+        if has_fundamental_data:
+            multibagger_raw = (
+                (multibagger_base_score * 0.30)
+                + (earnings_score * 0.25)
+                + (smart_money_score * 0.20)
+                + (trend_score * 0.15)
+                + (forensic_score * 0.10)
+            )
+            multibagger_score = round(min(100.0, max(0.0, multibagger_raw)), 1)
+        else:
+            multibagger_score = 0.0
 
         # Multi-Horizon Confluence Identification
         high_threshold = 75.0
         qualifying = sum([
             1 if swing_score >= high_threshold else 0,
             1 if positional_score >= high_threshold else 0,
-            1 if multibagger_score >= high_threshold else 0,
+            1 if (multibagger_score >= high_threshold and has_fundamental_data) else 0,
         ])
 
         confluence_tag: Optional[str] = None
-        if qualifying == 3:
+        if qualifying == 3 and has_fundamental_data:
             confluence_tag = "Triple Confluence Unicorn 🦄"
         elif qualifying == 2:
             confluence_tag = "Dual Confluence 🔥"
@@ -112,7 +127,7 @@ class PortfolioScoringEngine:
             scores = [
                 ("SWING", swing_score),
                 ("POSITIONAL", positional_score),
-                ("MULTIBAGGER", multibagger_score),
+                ("MULTIBAGGER", multibagger_score if has_fundamental_data else 0.0),
             ]
             best_portfolio, best_score = max(scores, key=lambda x: x[1])
             if best_score >= 65.0:
@@ -127,5 +142,6 @@ class PortfolioScoringEngine:
             earnings_score=round(earnings_score, 1), smart_money_score=round(smart_money_score, 1),
             multibagger_base_score=round(multibagger_base_score, 1), forensic_score=round(forensic_score, 1),
             swing_score=swing_score, positional_score=positional_score, multibagger_score=multibagger_score,
-            primary_portfolio=primary_portfolio, confluence_tag=confluence_tag, passed_forensic_shield=is_clean
+            primary_portfolio=primary_portfolio, confluence_tag=confluence_tag, passed_forensic_shield=is_clean,
+            has_fundamental_data=has_fundamental_data
         )

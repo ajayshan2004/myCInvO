@@ -137,3 +137,30 @@ def test_fetch_metrics_and_surveillance_sync(fund_setup):
     assert engine.is_surveilled("INE999A01099") is True
     assert engine.is_surveilled("INE000000000") is False
 
+
+def test_populate_universe_fundamentals(fund_setup):
+    """Verify batch population of quarterly financials and shareholding patterns."""
+    engine, db = fund_setup
+    from src.data.models import Security, ListingStatus
+    db.upsert_securities([
+        Security(isin="INE001A01001", company_name="Corp A", listing_status=ListingStatus.NSE_ONLY, nse_symbol="CORPA"),
+        Security(isin="INE002B01002", company_name="Corp B", listing_status=ListingStatus.BSE_ONLY, bse_code="500002"),
+    ])
+
+    count = engine.populate_universe_fundamentals(num_quarters=8)
+    assert count == 16  # 2 securities * 8 quarters
+
+    # Verify DuckDB table records
+    fin_rows = db.conn.execute("SELECT count(*) FROM quarterly_financials;").fetchone()[0]
+    shp_rows = db.conn.execute("SELECT count(*) FROM shareholding_patterns;").fetchone()[0]
+    assert fin_rows == 16
+    assert shp_rows == 16
+
+    accel = engine.calculate_earnings_acceleration("INE001A01001")
+    assert accel["has_data"] is True
+    assert accel["pat_growth_yoy"] > 0
+
+    shp = engine.calculate_smart_money_trend("INE001A01001")
+    assert shp["has_data"] is True
+    assert shp["inst_holding"] > 0
+

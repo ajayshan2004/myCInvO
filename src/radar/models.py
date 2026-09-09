@@ -115,6 +115,7 @@ class OpportunityScore:
     primary_portfolio: str
     confluence_tag: Optional[str]
     passed_forensic_shield: bool
+    has_fundamental_data: bool = True
 
 
 

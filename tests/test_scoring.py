@@ -102,3 +102,17 @@ def test_forensic_shield_rejection_in_scoring(scoring_setup):
     assert res.passed_forensic_shield is False
     assert res.primary_portfolio == "NONE"
     assert res.confluence_tag is None
+
+
+def test_empty_fundamental_data_strict_guard(scoring_setup):
+    """Verify that when quarterly financials are missing, multibagger score is 0 and unicorn is prevented."""
+    engine, db = scoring_setup
+    res = engine.calculate_granular_scores(
+        isin="INE000EMPTY00", symbol="NODATA", company_name="No Data Corp", trade_date=date(2026, 9, 2),
+        trend_score=95.0, vcp_score=90.0, momentum_score=90.0, volume_footprint_score=95.0,
+        multibagger_base_score=95.0
+    )
+    assert res.has_fundamental_data is False
+    assert res.multibagger_score == 0.0
+    assert res.confluence_tag != "Triple Confluence Unicorn 🦄"
+    assert res.primary_portfolio != "MULTIBAGGER"

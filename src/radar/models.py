@@ -5,6 +5,7 @@ Purpose: Domain models for screener candidates, trend scores, and breakout setup
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
+from typing import Optional
 
 
 @dataclass
@@ -91,6 +92,30 @@ class MultibaggerCandidate:
     weekly_30_ema: float
     volume_surge_mult: float
     trend_strength_score: float
+
+
+@dataclass
+class OpportunityScore:
+    """Comprehensive multi-angle scoring across rules, portfolios, and confluence."""
+    isin: str
+    symbol: str
+    company_name: str
+    trade_date: date
+    trend_score: float
+    vcp_score: float
+    momentum_score: float
+    volume_footprint_score: float
+    earnings_score: float
+    smart_money_score: float
+    multibagger_base_score: float
+    forensic_score: float
+    swing_score: float
+    positional_score: float
+    multibagger_score: float
+    primary_portfolio: str
+    confluence_tag: Optional[str]
+    passed_forensic_shield: bool
+
 
 
 
